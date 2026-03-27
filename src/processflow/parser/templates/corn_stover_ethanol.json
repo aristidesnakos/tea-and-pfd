@@ -1,0 +1,224 @@
+{
+  "process_name": "Corn Stover to Ethanol (NREL 2011 Design)",
+  "description": "Cellulosic ethanol production from corn stover via dilute acid pretreatment, enzymatic hydrolysis, co-fermentation of C5 and C6 sugars, beer column distillation, and molecular sieve dehydration. Based on NREL/TP-5100-47764 design basis: 2000 dry metric tons/day corn stover feedstock.",
+  "feedstock": {
+    "name": "corn_stover",
+    "flow_rate_kg_hr": 83333.33,
+    "composition": {
+      "Glucan": 0.3505,
+      "Xylan": 0.1953,
+      "Lignin": 0.1576,
+      "Ash": 0.0493,
+      "Acetate": 0.0181,
+      "Protein": 0.0310,
+      "Arabinan": 0.0238,
+      "Galactan": 0.0143,
+      "Mannan": 0.0060,
+      "Sucrose": 0.0077,
+      "Extract": 0.1464
+    },
+    "price_usd_per_ton": 83.0
+  },
+  "products": [
+    {
+      "name": "Ethanol",
+      "purity": 0.995,
+      "expected_yield_kg_hr": null,
+      "price_usd_per_ton": null
+    }
+  ],
+  "chemicals": [
+    {"name": "Ethanol", "role": "product", "formula": "C2H6O"},
+    {"name": "Glucose", "role": "intermediate", "formula": "C6H12O6"},
+    {"name": "Xylose", "role": "intermediate", "formula": "C5H10O5"},
+    {"name": "Water", "role": "utility", "formula": "H2O"},
+    {"name": "H2SO4", "role": "utility", "formula": "H2SO4"},
+    {"name": "CO2", "role": "waste", "formula": "CO2"},
+    {"name": "CaO", "role": "utility", "formula": "CaO"},
+    {"name": "NH3", "role": "utility", "formula": "NH3"}
+  ],
+  "units": [
+    {
+      "id": "U-101",
+      "type": "SizeReduction",
+      "subtype": "milling",
+      "name": "Feedstock Handling",
+      "section": "feedstock_handling",
+      "params": {
+        "target_particle_size_mm": 6
+      }
+    },
+    {
+      "id": "U-201",
+      "type": "Pretreatment",
+      "subtype": "dilute_acid",
+      "name": "Dilute Acid Pretreatment",
+      "section": "pretreatment",
+      "params": {
+        "temperature_C": 158,
+        "pressure_bar": 5.5,
+        "residence_time_min": 5,
+        "acid_loading_wt_pct": 1.1,
+        "solids_loading_wt_pct": 30,
+        "xylan_to_xylose_conversion": 0.90,
+        "glucan_to_glucose_conversion": 0.099
+      }
+    },
+    {
+      "id": "U-202",
+      "type": "Reactor",
+      "subtype": "neutralization",
+      "name": "Ammonia Conditioning",
+      "section": "pretreatment",
+      "params": {
+        "target_pH": 5.0,
+        "agent": "NH3"
+      }
+    },
+    {
+      "id": "U-301",
+      "type": "EnzymaticHydrolysis",
+      "subtype": "saccharification",
+      "name": "Enzymatic Hydrolysis",
+      "section": "saccharification_fermentation",
+      "params": {
+        "temperature_C": 48,
+        "residence_time_hr": 84,
+        "enzyme_loading_mg_per_g_cellulose": 20,
+        "glucan_to_glucose_conversion": 0.90,
+        "xylan_to_xylose_conversion": 0.024
+      }
+    },
+    {
+      "id": "U-302",
+      "type": "Fermentor",
+      "subtype": "co_fermentation",
+      "name": "Co-Fermentation",
+      "section": "saccharification_fermentation",
+      "params": {
+        "temperature_C": 32,
+        "residence_time_hr": 36,
+        "organism": "Zymomonas mobilis",
+        "glucose_to_ethanol_conversion": 0.95,
+        "xylose_to_ethanol_conversion": 0.85
+      }
+    },
+    {
+      "id": "U-401",
+      "type": "Distillation",
+      "subtype": "beer_column",
+      "name": "Beer Column",
+      "section": "separation",
+      "params": {
+        "num_stages": 32,
+        "feed_stage": 4,
+        "reflux_ratio": 1.33,
+        "overhead_ethanol_wt_pct": 40
+      }
+    },
+    {
+      "id": "U-402",
+      "type": "Distillation",
+      "subtype": "rectification",
+      "name": "Rectification Column",
+      "section": "separation",
+      "params": {
+        "num_stages": 45,
+        "overhead_ethanol_wt_pct": 92.5
+      }
+    },
+    {
+      "id": "U-403",
+      "type": "MolecularSieve",
+      "subtype": "dehydration",
+      "name": "Molecular Sieve Dehydration",
+      "section": "separation",
+      "params": {
+        "target_purity_wt_pct": 99.5
+      }
+    },
+    {
+      "id": "U-501",
+      "type": "WastewaterTreatment",
+      "subtype": "anaerobic_aerobic",
+      "name": "Wastewater Treatment",
+      "section": "wastewater",
+      "params": {
+        "cod_removal_pct": 95,
+        "biogas_yield": true
+      }
+    },
+    {
+      "id": "U-601",
+      "type": "Boiler",
+      "subtype": "combined_heat_power",
+      "name": "Boiler/Turbogenerator",
+      "section": "utilities",
+      "params": {
+        "fuel_source": "lignin_and_biogas",
+        "steam_pressure_bar": 60,
+        "excess_electricity_export": true
+      }
+    }
+  ],
+  "streams": [
+    {"from_id": "feed", "to_id": "U-101", "components": ["corn_stover"]},
+    {"from_id": "U-101", "to_id": "U-201", "phase": "solid", "components": ["corn_stover"]},
+    {"from_id": "U-201", "to_id": "U-202", "phase": "mixed", "components": ["Glucose", "Xylose", "Lignin", "H2SO4"]},
+    {"from_id": "U-202", "to_id": "U-301", "phase": "mixed", "components": ["Glucose", "Xylose", "Lignin"]},
+    {"from_id": "U-301", "to_id": "U-302", "phase": "mixed", "components": ["Glucose", "Xylose", "Lignin"]},
+    {"from_id": "U-302", "to_id": "U-401", "phase": "liquid", "components": ["Ethanol", "Water", "CO2"]},
+    {"from_id": "U-401", "to_id": "U-402", "phase": "vapor", "components": ["Ethanol", "Water"]},
+    {"from_id": "U-402", "to_id": "U-403", "phase": "vapor", "components": ["Ethanol", "Water"]},
+    {"from_id": "U-403", "to_id": "product", "phase": "liquid", "components": ["Ethanol"]},
+    {"from_id": "U-401", "to_id": "U-501", "phase": "liquid", "components": ["Water", "Lignin"]},
+    {"from_id": "U-501", "to_id": "U-601", "phase": "mixed", "components": ["Lignin", "biogas"]},
+    {"from_id": "U-601", "to_id": "utility", "components": ["steam", "electricity"]}
+  ],
+  "reactions": [
+    {
+      "unit_id": "U-201",
+      "reactants": ["Xylan", "Water"],
+      "products": ["Xylose"],
+      "conversion": 0.90,
+      "stoichiometry": "Xylan + Water -> Xylose"
+    },
+    {
+      "unit_id": "U-301",
+      "reactants": ["Glucan", "Water"],
+      "products": ["Glucose"],
+      "conversion": 0.90,
+      "stoichiometry": "Glucan + Water -> Glucose"
+    },
+    {
+      "unit_id": "U-302",
+      "reactants": ["Glucose"],
+      "products": ["Ethanol", "CO2"],
+      "conversion": 0.95,
+      "stoichiometry": "Glucose -> 2 Ethanol + 2 CO2"
+    },
+    {
+      "unit_id": "U-302",
+      "reactants": ["Xylose"],
+      "products": ["Ethanol", "CO2"],
+      "conversion": 0.85,
+      "stoichiometry": "3 Xylose -> 5 Ethanol + 5 CO2"
+    }
+  ],
+  "economic": {
+    "operating_days": 330,
+    "plant_lifetime_years": 30,
+    "discount_rate": 0.10,
+    "income_tax_rate": 0.21,
+    "depreciation_schedule": "MACRS7",
+    "construction_years": 3,
+    "startup_months": 3,
+    "working_capital_fraction": 0.05
+  },
+  "metadata": {
+    "source": "template",
+    "auto_filled_params": [],
+    "confidence_scores": {},
+    "template_name": "corn_stover_ethanol"
+  }
+}
