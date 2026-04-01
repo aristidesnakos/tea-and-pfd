@@ -16,24 +16,24 @@ from processflow.schema.process_spec import ProcessSpec, UnitType
 if TYPE_CHECKING:
     import graphviz as gv
 
-# Graphviz shape mapping for unit operation types
-UNIT_SHAPES: dict[UnitType, dict[str, str]] = {
-    UnitType.REACTOR: {"shape": "octagon", "style": "filled", "fillcolor": "#BBDEFB"},
-    UnitType.FERMENTOR: {"shape": "octagon", "style": "filled", "fillcolor": "#C8E6C9"},
-    UnitType.ENZYMATIC_HYDROLYSIS: {"shape": "octagon", "style": "filled", "fillcolor": "#C8E6C9"},
-    UnitType.PRETREATMENT: {"shape": "hexagon", "style": "filled", "fillcolor": "#FFE0B2"},
-    UnitType.DISTILLATION: {"shape": "trapezium", "style": "filled", "fillcolor": "#F8BBD0"},
-    UnitType.MOLECULAR_SIEVE: {"shape": "trapezium", "style": "filled", "fillcolor": "#F8BBD0"},
-    UnitType.EVAPORATOR: {"shape": "trapezium", "style": "filled", "fillcolor": "#F8BBD0"},
-    UnitType.FLASH: {"shape": "invtrapezium", "style": "filled", "fillcolor": "#F8BBD0"},
-    UnitType.BOILER: {"shape": "doubleoctagon", "style": "filled", "fillcolor": "#B2DFDB"},
-    UnitType.TURBINE: {"shape": "doubleoctagon", "style": "filled", "fillcolor": "#B2DFDB"},
-    UnitType.PUMP: {"shape": "triangle", "style": "filled", "fillcolor": "#E0E0E0"},
-    UnitType.HEAT_EXCHANGER: {"shape": "diamond", "style": "filled", "fillcolor": "#FFF9C4"},
-    UnitType.STORAGE_TANK: {"shape": "cylinder", "style": "filled", "fillcolor": "#D7CCC8"},
-    UnitType.WASTEWATER_TREATMENT: {"shape": "box3d", "style": "filled", "fillcolor": "#E1BEE7"},
-    UnitType.MIXER: {"shape": "invtriangle", "style": "filled", "fillcolor": "#E0E0E0"},
-    UnitType.SPLITTER: {"shape": "triangle", "style": "filled", "fillcolor": "#E0E0E0"},
+# Graphviz shape mapping for unit operation types (keyed by string)
+UNIT_SHAPES: dict[str, dict[str, str]] = {
+    UnitType.REACTOR.value: {"shape": "octagon", "style": "filled", "fillcolor": "#BBDEFB"},
+    UnitType.FERMENTOR.value: {"shape": "octagon", "style": "filled", "fillcolor": "#C8E6C9"},
+    UnitType.ENZYMATIC_HYDROLYSIS.value: {"shape": "octagon", "style": "filled", "fillcolor": "#C8E6C9"},
+    UnitType.PRETREATMENT.value: {"shape": "hexagon", "style": "filled", "fillcolor": "#FFE0B2"},
+    UnitType.DISTILLATION.value: {"shape": "trapezium", "style": "filled", "fillcolor": "#F8BBD0"},
+    UnitType.MOLECULAR_SIEVE.value: {"shape": "trapezium", "style": "filled", "fillcolor": "#F8BBD0"},
+    UnitType.EVAPORATOR.value: {"shape": "trapezium", "style": "filled", "fillcolor": "#F8BBD0"},
+    UnitType.FLASH.value: {"shape": "invtrapezium", "style": "filled", "fillcolor": "#F8BBD0"},
+    UnitType.BOILER.value: {"shape": "doubleoctagon", "style": "filled", "fillcolor": "#B2DFDB"},
+    UnitType.TURBINE.value: {"shape": "doubleoctagon", "style": "filled", "fillcolor": "#B2DFDB"},
+    UnitType.PUMP.value: {"shape": "triangle", "style": "filled", "fillcolor": "#E0E0E0"},
+    UnitType.HEAT_EXCHANGER.value: {"shape": "diamond", "style": "filled", "fillcolor": "#FFF9C4"},
+    UnitType.STORAGE_TANK.value: {"shape": "cylinder", "style": "filled", "fillcolor": "#D7CCC8"},
+    UnitType.WASTEWATER_TREATMENT.value: {"shape": "box3d", "style": "filled", "fillcolor": "#E1BEE7"},
+    UnitType.MIXER.value: {"shape": "invtriangle", "style": "filled", "fillcolor": "#E0E0E0"},
+    UnitType.SPLITTER.value: {"shape": "triangle", "style": "filled", "fillcolor": "#E0E0E0"},
 }
 
 DEFAULT_NODE_ATTRS = {"shape": "box", "style": "filled", "fillcolor": "#E8EAF6"}
@@ -118,7 +118,7 @@ def render_graphviz(spec: ProcessSpec) -> gv.Digraph:
                 unit = spec.get_unit_by_id(uid)
                 if unit is None:
                     continue
-                label = f"{uid}\n{unit.name or unit.type.value}"
+                label = f"{uid}\n{unit.name or unit.type}"
                 attrs = UNIT_SHAPES.get(unit.type, DEFAULT_NODE_ATTRS).copy()
                 sub.node(uid, label=label, **attrs)
 
@@ -137,7 +137,8 @@ def render_graphviz(spec: ProcessSpec) -> gv.Digraph:
     for stream in spec.streams:
         label_parts = []
         if stream.components:
-            label_parts.append(", ".join(stream.components[:3]))
+            names = stream.component_names
+            label_parts.append(", ".join(names[:3]))
         if stream.flow_rate_kg_hr:
             label_parts.append(f"{stream.flow_rate_kg_hr:.0f} kg/hr")
         label = "\n".join(label_parts) if label_parts else ""

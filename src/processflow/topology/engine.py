@@ -12,7 +12,7 @@ from collections import deque
 from copy import deepcopy
 from dataclasses import dataclass, field
 
-from processflow.schema.process_spec import ProcessSpec, UnitOperation, UnitType
+from processflow.schema.process_spec import ProcessSpec, UnitType
 from processflow.topology.registry import UNIT_REGISTRY, get_default_params
 
 
@@ -57,33 +57,27 @@ class TopologyEngine:
         for unit in spec.units:
             if unit.type not in UNIT_REGISTRY:
                 result.add_warning(
-                    f"Unit {unit.id} type '{unit.type.value}' not in registry — "
+                    f"Unit {unit.id} type '{unit.type}' not in registry — "
                     "no default parameters available"
                 )
 
         # Check stream connectivity
         unit_ids = set(ids)
-        special = {"feed", "product", "waste", "utility"}
-        valid_ids = unit_ids | special
 
         referenced_units = set()
         has_feed = False
         has_product = False
 
         for stream in spec.streams:
-            if stream.from_id not in valid_ids:
-                result.add_error(f"Stream references unknown source: '{stream.from_id}'")
-            if stream.to_id not in valid_ids:
-                result.add_error(f"Stream references unknown destination: '{stream.to_id}'")
-
             if stream.from_id in unit_ids:
                 referenced_units.add(stream.from_id)
             if stream.to_id in unit_ids:
                 referenced_units.add(stream.to_id)
 
-            if stream.from_id == "feed":
+            # Case-insensitive check for feed/product boundary nodes
+            if stream.from_id.lower() == "feed":
                 has_feed = True
-            if stream.to_id == "product":
+            if stream.to_id.lower() == "product":
                 has_product = True
 
         # Check for orphan units
@@ -92,15 +86,19 @@ class TopologyEngine:
             result.add_warning(f"Orphan units (not connected by any stream): {orphans}")
 
         if not has_feed:
-            result.add_error("No feed stream found (stream with from_id='feed')")
+            result.add_warning("No feed stream found (stream with from_id='feed')")
 
         if not has_product:
             result.add_warning("No product stream found (stream with to_id='product')")
 
-        # Check graph connectivity via BFS from feed
+        # Check graph connectivity via BFS from feed-like nodes
         graph = spec.get_connected_graph()
         visited = set()
-        queue = deque(["feed"])
+        # Start from any boundary node that is a source (not a unit ID)
+        start_nodes = {s.from_id for s in spec.streams if s.from_id not in unit_ids}
+        if not start_nodes:
+            start_nodes = {"feed"}
+        queue = deque(start_nodes)
         while queue:
             node = queue.popleft()
             if node in visited:
@@ -152,34 +150,34 @@ class TopologyEngine:
         return spec
 
 
-def _infer_section(unit_type: UnitType) -> str:
+def _infer_section(unit_type: str) -> str:
     """Infer the process section from unit type."""
-    section_map: dict[UnitType, str] = {
-        UnitType.SIZE_REDUCTION: "feedstock_handling",
-        UnitType.CONVEYOR: "feedstock_handling",
-        UnitType.SCREW_FEEDER: "feedstock_handling",
-        UnitType.PRETREATMENT: "pretreatment",
-        UnitType.REACTOR: "reaction",
-        UnitType.FERMENTOR: "fermentation",
-        UnitType.ENZYMATIC_HYDROLYSIS: "saccharification",
-        UnitType.DISTILLATION: "separation",
-        UnitType.FLASH: "separation",
-        UnitType.MOLECULAR_SIEVE: "purification",
-        UnitType.EVAPORATOR: "separation",
-        UnitType.FILTER: "separation",
-        UnitType.CENTRIFUGE: "separation",
-        UnitType.ADSORPTION: "purification",
-        UnitType.CRYSTALLIZER: "purification",
-        UnitType.DRYER: "separation",
-        UnitType.MIXER: "other",
-        UnitType.SPLITTER: "other",
-        UnitType.HEAT_EXCHANGER: "heat_transfer",
-        UnitType.PUMP: "other",
-        UnitType.STORAGE_TANK: "storage",
-        UnitType.BOILER: "utilities",
-        UnitType.TURBINE: "utilities",
-        UnitType.COOLING_TOWER: "utilities",
-        UnitType.WASTEWATER_TREATMENT: "wastewater",
-        UnitType.COMPRESSOR: "other",
+    section_map: dict[str, str] = {
+        UnitType.SIZE_REDUCTION.value: "feedstock_handling",
+        UnitType.CONVEYOR.value: "feedstock_handling",
+        UnitType.SCREW_FEEDER.value: "feedstock_handling",
+        UnitType.PRETREATMENT.value: "pretreatment",
+        UnitType.REACTOR.value: "reaction",
+        UnitType.FERMENTOR.value: "fermentation",
+        UnitType.ENZYMATIC_HYDROLYSIS.value: "saccharification",
+        UnitType.DISTILLATION.value: "separation",
+        UnitType.FLASH.value: "separation",
+        UnitType.MOLECULAR_SIEVE.value: "purification",
+        UnitType.EVAPORATOR.value: "separation",
+        UnitType.FILTER.value: "separation",
+        UnitType.CENTRIFUGE.value: "separation",
+        UnitType.ADSORPTION.value: "purification",
+        UnitType.CRYSTALLIZER.value: "purification",
+        UnitType.DRYER.value: "separation",
+        UnitType.MIXER.value: "other",
+        UnitType.SPLITTER.value: "other",
+        UnitType.HEAT_EXCHANGER.value: "heat_transfer",
+        UnitType.PUMP.value: "other",
+        UnitType.STORAGE_TANK.value: "storage",
+        UnitType.BOILER.value: "utilities",
+        UnitType.TURBINE.value: "utilities",
+        UnitType.COOLING_TOWER.value: "utilities",
+        UnitType.WASTEWATER_TREATMENT.value: "wastewater",
+        UnitType.COMPRESSOR.value: "other",
     }
     return section_map.get(unit_type, "other")

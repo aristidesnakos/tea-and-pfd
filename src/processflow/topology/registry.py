@@ -16,47 +16,48 @@ from processflow.schema.process_spec import UnitType
 class UnitRegistryEntry:
     """Registry entry mapping a ProcessSpec unit type to BioSTEAM."""
 
-    unit_type: UnitType
+    unit_type: str
     biosteam_class: str  # Dotted path, e.g., 'biosteam.units.Mixer'
     default_params: dict[str, Any] = field(default_factory=dict)
     description: str = ""
     subtypes: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
-# The registry: maps UnitType enum values to their BioSTEAM configuration.
+# The registry: maps unit type strings to their BioSTEAM configuration.
 # Default parameters are sourced from NREL design reports and BioSTEAM examples.
-UNIT_REGISTRY: dict[UnitType, UnitRegistryEntry] = {
-    UnitType.MIXER: UnitRegistryEntry(
-        unit_type=UnitType.MIXER,
+# Keys use UnitType enum .value strings for known types; custom types use raw strings.
+UNIT_REGISTRY: dict[str, UnitRegistryEntry] = {
+    UnitType.MIXER.value: UnitRegistryEntry(
+        unit_type=UnitType.MIXER.value,
         biosteam_class="biosteam.units.Mixer",
         description="Stream mixer — combines multiple input streams",
     ),
-    UnitType.SPLITTER: UnitRegistryEntry(
-        unit_type=UnitType.SPLITTER,
+    UnitType.SPLITTER.value: UnitRegistryEntry(
+        unit_type=UnitType.SPLITTER.value,
         biosteam_class="biosteam.units.Splitter",
         default_params={"split": 0.5},
         description="Stream splitter — divides a stream by ratio",
     ),
-    UnitType.HEAT_EXCHANGER: UnitRegistryEntry(
-        unit_type=UnitType.HEAT_EXCHANGER,
+    UnitType.HEAT_EXCHANGER.value: UnitRegistryEntry(
+        unit_type=UnitType.HEAT_EXCHANGER.value,
         biosteam_class="biosteam.units.HXutility",
         default_params={"T": 350},
         description="Heat exchanger with utility heating/cooling",
     ),
-    UnitType.PUMP: UnitRegistryEntry(
-        unit_type=UnitType.PUMP,
+    UnitType.PUMP.value: UnitRegistryEntry(
+        unit_type=UnitType.PUMP.value,
         biosteam_class="biosteam.units.Pump",
         default_params={"P": 101325},
         description="Liquid pump",
     ),
-    UnitType.FLASH: UnitRegistryEntry(
-        unit_type=UnitType.FLASH,
+    UnitType.FLASH.value: UnitRegistryEntry(
+        unit_type=UnitType.FLASH.value,
         biosteam_class="biosteam.units.Flash",
         default_params={"T": 373.15, "P": 101325},
         description="Vapor-liquid flash separator",
     ),
-    UnitType.DISTILLATION: UnitRegistryEntry(
-        unit_type=UnitType.DISTILLATION,
+    UnitType.DISTILLATION.value: UnitRegistryEntry(
+        unit_type=UnitType.DISTILLATION.value,
         biosteam_class="biosteam.units.BinaryDistillation",
         default_params={"LHK": ("Ethanol", "Water"), "k": 1.25, "Rmin": 0.6},
         description="Distillation column for binary or multi-component separation",
@@ -73,8 +74,8 @@ UNIT_REGISTRY: dict[UnitType, UnitRegistryEntry] = {
             },
         },
     ),
-    UnitType.REACTOR: UnitRegistryEntry(
-        unit_type=UnitType.REACTOR,
+    UnitType.REACTOR.value: UnitRegistryEntry(
+        unit_type=UnitType.REACTOR.value,
         biosteam_class="biosteam.units.StirredTankReactor",
         default_params={"tau": 1.0, "T": 323.15},
         description="Continuous stirred-tank reactor",
@@ -82,8 +83,8 @@ UNIT_REGISTRY: dict[UnitType, UnitRegistryEntry] = {
             "neutralization": {"tau": 0.5, "T": 323.15},
         },
     ),
-    UnitType.FERMENTOR: UnitRegistryEntry(
-        unit_type=UnitType.FERMENTOR,
+    UnitType.FERMENTOR.value: UnitRegistryEntry(
+        unit_type=UnitType.FERMENTOR.value,
         biosteam_class="biosteam.units.StirredTankReactor",
         default_params={"tau": 36.0, "T": 305.15},
         description="Fermentation vessel",
@@ -92,14 +93,14 @@ UNIT_REGISTRY: dict[UnitType, UnitRegistryEntry] = {
             "anaerobic": {"tau": 48.0, "T": 310.15},
         },
     ),
-    UnitType.ENZYMATIC_HYDROLYSIS: UnitRegistryEntry(
-        unit_type=UnitType.ENZYMATIC_HYDROLYSIS,
+    UnitType.ENZYMATIC_HYDROLYSIS.value: UnitRegistryEntry(
+        unit_type=UnitType.ENZYMATIC_HYDROLYSIS.value,
         biosteam_class="biosteam.units.StirredTankReactor",
         default_params={"tau": 84.0, "T": 321.15},
         description="Enzymatic hydrolysis (saccharification) reactor",
     ),
-    UnitType.PRETREATMENT: UnitRegistryEntry(
-        unit_type=UnitType.PRETREATMENT,
+    UnitType.PRETREATMENT.value: UnitRegistryEntry(
+        unit_type=UnitType.PRETREATMENT.value,
         biosteam_class="biosteam.units.StirredTankReactor",
         default_params={"tau": 0.083, "T": 431.15, "P": 550000},
         description="Biomass pretreatment reactor",
@@ -109,56 +110,56 @@ UNIT_REGISTRY: dict[UnitType, UnitRegistryEntry] = {
             "alkaline": {"tau": 1.0, "T": 393.15},
         },
     ),
-    UnitType.MOLECULAR_SIEVE: UnitRegistryEntry(
-        unit_type=UnitType.MOLECULAR_SIEVE,
+    UnitType.MOLECULAR_SIEVE.value: UnitRegistryEntry(
+        unit_type=UnitType.MOLECULAR_SIEVE.value,
         biosteam_class="biosteam.units.MolecularSieve",
         default_params={},
         description="Molecular sieve for dehydration (e.g., ethanol to 99.5%)",
     ),
-    UnitType.EVAPORATOR: UnitRegistryEntry(
-        unit_type=UnitType.EVAPORATOR,
+    UnitType.EVAPORATOR.value: UnitRegistryEntry(
+        unit_type=UnitType.EVAPORATOR.value,
         biosteam_class="biosteam.units.MultiEffectEvaporator",
         default_params={"n_effects": 3},
         description="Multi-effect evaporator for concentration",
     ),
-    UnitType.FILTER: UnitRegistryEntry(
-        unit_type=UnitType.FILTER,
+    UnitType.FILTER.value: UnitRegistryEntry(
+        unit_type=UnitType.FILTER.value,
         biosteam_class="biosteam.units.SolidsCentrifuge",
         default_params={},
         description="Solid-liquid separation filter",
     ),
-    UnitType.CENTRIFUGE: UnitRegistryEntry(
-        unit_type=UnitType.CENTRIFUGE,
+    UnitType.CENTRIFUGE.value: UnitRegistryEntry(
+        unit_type=UnitType.CENTRIFUGE.value,
         biosteam_class="biosteam.units.SolidsCentrifuge",
         default_params={},
         description="Centrifuge for solid-liquid separation",
     ),
-    UnitType.DRYER: UnitRegistryEntry(
-        unit_type=UnitType.DRYER,
+    UnitType.DRYER.value: UnitRegistryEntry(
+        unit_type=UnitType.DRYER.value,
         biosteam_class="biosteam.units.DrumDryer",
         default_params={},
         description="Dryer for moisture removal",
     ),
-    UnitType.STORAGE_TANK: UnitRegistryEntry(
-        unit_type=UnitType.STORAGE_TANK,
+    UnitType.STORAGE_TANK.value: UnitRegistryEntry(
+        unit_type=UnitType.STORAGE_TANK.value,
         biosteam_class="biosteam.units.StorageTank",
         default_params={"tau": 24.0},
         description="Storage tank",
     ),
-    UnitType.BOILER: UnitRegistryEntry(
-        unit_type=UnitType.BOILER,
+    UnitType.BOILER.value: UnitRegistryEntry(
+        unit_type=UnitType.BOILER.value,
         biosteam_class="biosteam.units.BoilerTurbogenerator",
         default_params={},
         description="Boiler / combined heat and power system",
     ),
-    UnitType.TURBINE: UnitRegistryEntry(
-        unit_type=UnitType.TURBINE,
+    UnitType.TURBINE.value: UnitRegistryEntry(
+        unit_type=UnitType.TURBINE.value,
         biosteam_class="biosteam.units.Turbine",
         default_params={},
         description="Steam or gas turbine for power generation",
     ),
-    UnitType.WASTEWATER_TREATMENT: UnitRegistryEntry(
-        unit_type=UnitType.WASTEWATER_TREATMENT,
+    UnitType.WASTEWATER_TREATMENT.value: UnitRegistryEntry(
+        unit_type=UnitType.WASTEWATER_TREATMENT.value,
         biosteam_class="biosteam.units.AnaerobicDigestion",
         default_params={},
         description="Wastewater treatment system",
@@ -167,14 +168,14 @@ UNIT_REGISTRY: dict[UnitType, UnitRegistryEntry] = {
             "aerobic": {},
         },
     ),
-    UnitType.SIZE_REDUCTION: UnitRegistryEntry(
-        unit_type=UnitType.SIZE_REDUCTION,
+    UnitType.SIZE_REDUCTION.value: UnitRegistryEntry(
+        unit_type=UnitType.SIZE_REDUCTION.value,
         biosteam_class="biosteam.units.HammerMill",
         default_params={},
         description="Size reduction equipment (mill, grinder)",
     ),
-    UnitType.COMPRESSOR: UnitRegistryEntry(
-        unit_type=UnitType.COMPRESSOR,
+    UnitType.COMPRESSOR.value: UnitRegistryEntry(
+        unit_type=UnitType.COMPRESSOR.value,
         biosteam_class="biosteam.units.IsentropicCompressor",
         default_params={"P": 1000000},
         description="Gas compressor",
@@ -182,12 +183,12 @@ UNIT_REGISTRY: dict[UnitType, UnitRegistryEntry] = {
 }
 
 
-def get_registry_entry(unit_type: UnitType) -> UnitRegistryEntry | None:
-    """Look up a registry entry by unit type."""
+def get_registry_entry(unit_type: str) -> UnitRegistryEntry | None:
+    """Look up a registry entry by unit type string."""
     return UNIT_REGISTRY.get(unit_type)
 
 
-def get_default_params(unit_type: UnitType, subtype: str | None = None) -> dict[str, Any]:
+def get_default_params(unit_type: str, subtype: str | None = None) -> dict[str, Any]:
     """Get default parameters for a unit type, optionally with subtype overrides."""
     entry = UNIT_REGISTRY.get(unit_type)
     if entry is None:
@@ -198,6 +199,6 @@ def get_default_params(unit_type: UnitType, subtype: str | None = None) -> dict[
     return params
 
 
-def list_supported_types() -> list[UnitType]:
+def list_supported_types() -> list[str]:
     """List all unit types with registry entries."""
     return list(UNIT_REGISTRY.keys())

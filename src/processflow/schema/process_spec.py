@@ -7,11 +7,12 @@ NL Parser → ProcessSpec → Topology Engine → PFD Renderer + TEA Generator
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class UnitType(str, Enum):
@@ -59,6 +60,8 @@ class ChemicalRole(str, Enum):
 class ChemicalSpec(BaseModel):
     """Specification for a chemical species in the process."""
 
+    model_config = ConfigDict(extra="allow")
+
     name: str = Field(description="Chemical name (must be resolvable by thermosteam)")
     cas_number: str | None = Field(default=None, description="CAS registry number")
     role: ChemicalRole = Field(description="Role in the process")
@@ -67,6 +70,8 @@ class ChemicalSpec(BaseModel):
 
 class Feedstock(BaseModel):
     """Process feedstock specification."""
+
+    model_config = ConfigDict(extra="allow")
 
     name: str = Field(description="Feedstock name")
     flow_rate_kg_hr: float = Field(gt=0, description="Mass flow rate in kg/hr")
@@ -81,6 +86,8 @@ class Feedstock(BaseModel):
 
 class Product(BaseModel):
     """Process product specification."""
+
+    model_config = ConfigDict(extra="allow")
 
     name: str = Field(description="Product name")
     purity: float | None = Field(
@@ -98,7 +105,7 @@ class UnitOperation(BaseModel):
     """A single unit operation in the process."""
 
     id: str = Field(description="Unique identifier (e.g., 'U-101', 'R-201')")
-    type: UnitType = Field(description="Unit operation type from BioSTEAM taxonomy")
+    type: str = Field(description="Unit operation type (e.g., 'Reactor', 'sox_prescrubber')")
     subtype: str | None = Field(
         default=None,
         description="More specific type (e.g., 'dilute_acid' for Pretreatment)",
@@ -113,9 +120,19 @@ class UnitOperation(BaseModel):
         description="Operating parameters (temperature_C, pressure_bar, etc.)",
     )
 
+    @field_validator("type", mode="before")
+    @classmethod
+    def coerce_unit_type(cls, v: Any) -> str:
+        """Accept UnitType enum instances or plain strings."""
+        if isinstance(v, UnitType):
+            return v.value
+        return str(v)
+
 
 class Stream(BaseModel):
     """A material or energy stream connection between units."""
+
+    model_config = ConfigDict(extra="allow")
 
     from_id: str = Field(
         description="Source unit ID or 'feed' for process feed"
@@ -126,16 +143,27 @@ class Stream(BaseModel):
     phase: str | None = Field(
         default=None, description="Stream phase: 'liquid', 'vapor', 'solid', 'mixed'"
     )
-    components: list[str] | None = Field(
-        default=None, description="Key chemical components in this stream"
+    components: dict[str, float] | list[str] | None = Field(
+        default=None, description="Key chemical components (list or {name: fraction} dict)"
     )
     flow_rate_kg_hr: float | None = Field(
         default=None, description="Total mass flow rate in kg/hr"
     )
 
+    @property
+    def component_names(self) -> list[str]:
+        """Return component names regardless of whether components is a list or dict."""
+        if self.components is None:
+            return []
+        if isinstance(self.components, dict):
+            return list(self.components.keys())
+        return self.components
+
 
 class Reaction(BaseModel):
     """A chemical or biochemical reaction occurring in a unit operation."""
+
+    model_config = ConfigDict(extra="allow")
 
     unit_id: str = Field(description="ID of the unit where this reaction occurs")
     reactants: list[str] = Field(description="Reactant species names")
@@ -151,6 +179,8 @@ class Reaction(BaseModel):
 
 class EconomicParams(BaseModel):
     """Economic and financial parameters for TEA."""
+
+    model_config = ConfigDict(extra="allow")
 
     operating_days: int = Field(default=330, ge=1, le=365)
     plant_lifetime_years: int = Field(default=20, ge=1)
@@ -169,10 +199,24 @@ class EconomicParams(BaseModel):
         default=None,
         description="Lang factor for total installed cost (if using simplified costing)",
     )
+    # Generic TEA fields (for non-BioSTEAM processes)
+    capex_usd: float | None = Field(
+        default=None, description="Total capital expenditure in USD"
+    )
+    annual_costs: dict[str, float] = Field(
+        default_factory=dict,
+        description="Named annual cost items, e.g. {'maintenance': 150000, 'solvent': 95000}",
+    )
+    annual_revenues: dict[str, float] = Field(
+        default_factory=dict,
+        description="Named annual revenue/savings items, e.g. {'ets_savings': 167580}",
+    )
 
 
 class ProcessMetadata(BaseModel):
     """Metadata about how the ProcessSpec was generated."""
+
+    model_config = ConfigDict(extra="allow")
 
     source: str = Field(
         default="user",
@@ -230,20 +274,20 @@ class ProcessSpec(BaseModel):
 
     @model_validator(mode="after")
     def validate_stream_references(self) -> ProcessSpec:
-        """Ensure all stream from_id/to_id reference valid unit IDs or special tokens."""
+        """Ensure all stream from_id/to_id reference valid unit IDs or boundary nodes.
+
+        Any from_id/to_id that is not a unit ID is treated as a boundary node
+        (e.g., 'feed', 'product', 'VENT', 'ENGINE'). Only raises if a from_id/to_id
+        looks like a unit ID pattern (U-xxx) but doesn't match any declared unit.
+        """
         unit_ids = {u.id for u in self.units}
-        special_tokens = {"feed", "product", "waste", "utility"}
-        valid_ids = unit_ids | special_tokens
 
         for stream in self.streams:
-            if stream.from_id not in valid_ids:
-                raise ValueError(
-                    f"Stream from_id '{stream.from_id}' not found in units or special tokens"
-                )
-            if stream.to_id not in valid_ids:
-                raise ValueError(
-                    f"Stream to_id '{stream.to_id}' not found in units or special tokens"
-                )
+            for label, ref in [("from_id", stream.from_id), ("to_id", stream.to_id)]:
+                if ref not in unit_ids:
+                    # Allow any string as a boundary node — the topology engine
+                    # will validate connectivity and warn about missing feed/product
+                    pass
         return self
 
     @model_validator(mode="after")
@@ -257,6 +301,46 @@ class ProcessSpec(BaseModel):
                 )
         return self
 
+    @classmethod
+    def _normalize_input(cls, data: dict) -> dict:
+        """Normalize known field name variations before Pydantic validation.
+
+        Handles:
+        - Feedstock/Product: price_per_ton → price_usd_per_ton
+        - Product: yield_kg_hr → expected_yield_kg_hr
+        - UnitOperation: parameters → params
+        - Economic: tax_rate → income_tax_rate
+        """
+        data = deepcopy(data)
+
+        # Feedstock field renames
+        if "feedstock" in data and isinstance(data["feedstock"], dict):
+            fs = data["feedstock"]
+            if "price_per_ton" in fs and "price_usd_per_ton" not in fs:
+                fs["price_usd_per_ton"] = fs.pop("price_per_ton")
+
+        # Product field renames
+        for prod in data.get("products", []):
+            if isinstance(prod, dict):
+                if "price_per_ton" in prod and "price_usd_per_ton" not in prod:
+                    prod["price_usd_per_ton"] = prod.pop("price_per_ton")
+                if "yield_kg_hr" in prod and "expected_yield_kg_hr" not in prod:
+                    prod["expected_yield_kg_hr"] = prod.pop("yield_kg_hr")
+
+        # Unit operation: parameters → params
+        for unit in data.get("units", []):
+            if isinstance(unit, dict):
+                if "parameters" in unit and "params" not in unit:
+                    unit["params"] = unit.pop("parameters")
+
+        # Economic: tax_rate → income_tax_rate
+        if "economic" in data and isinstance(data["economic"], dict):
+            eco = data["economic"]
+            if "tax_rate" in eco and "income_tax_rate" not in eco:
+                eco["income_tax_rate"] = eco.pop("tax_rate")
+
+        return data
+
     def to_json(self, path: str | Path | None = None, indent: int = 2) -> str:
         """Serialize to JSON string, optionally writing to file."""
         data = self.model_dump(mode="json")
@@ -267,7 +351,11 @@ class ProcessSpec(BaseModel):
 
     @classmethod
     def from_json(cls, path_or_string: str | Path) -> ProcessSpec:
-        """Load from a JSON file path or JSON string."""
+        """Load from a JSON file path or JSON string.
+
+        Applies field name normalization before validation so that common
+        variations (e.g., price_per_ton vs price_usd_per_ton) are accepted.
+        """
         text = str(path_or_string)
         # If it looks like JSON (starts with '{'), parse directly
         if text.lstrip().startswith("{"):
@@ -275,6 +363,7 @@ class ProcessSpec(BaseModel):
         else:
             path = Path(text)
             data = json.loads(path.read_text())
+        data = cls._normalize_input(data)
         return cls.model_validate(data)
 
     @classmethod

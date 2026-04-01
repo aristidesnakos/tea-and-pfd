@@ -21,6 +21,9 @@ def main() -> None:
 @click.option("--template", type=str, help="Use a built-in template (e.g., 'corn_stover_ethanol')")
 @click.option("--output", "-o", type=click.Path(), default="./results", help="Output directory")
 @click.option("--api-key", envvar="ANTHROPIC_API_KEY", help="Anthropic API key")
+@click.option("--openrouter-key", envvar="OPENROUTER_API_KEY", help="OpenRouter API key")
+@click.option("--provider", type=click.Choice(["anthropic", "openrouter"]), help="LLM provider (auto-detect by default)")
+@click.option("--model", type=str, help="LLM model to use")
 @click.option("--skip-simulation", is_flag=True, help="Skip BioSTEAM simulation (PFD only)")
 @click.option("--format", "pfd_format", type=click.Choice(["mermaid", "graphviz", "both"]),
               default="both", help="PFD output format")
@@ -30,6 +33,9 @@ def generate(
     template: str | None,
     output: str,
     api_key: str | None,
+    openrouter_key: str | None,
+    provider: str | None,
+    model: str | None,
     skip_simulation: bool,
     pfd_format: str,
 ) -> None:
@@ -42,6 +48,8 @@ def generate(
       processflow generate --template corn_stover_ethanol
 
       processflow generate --spec my_process.json
+
+      OPENROUTER_API_KEY=... processflow generate --provider openrouter --model x-ai/grok-4.20 "process description"
     """
     from processflow.schema.process_spec import ProcessSpec
     from processflow.topology.engine import TopologyEngine
@@ -58,9 +66,24 @@ def generate(
         from processflow.parser.nl_parser import load_template
         process_spec = load_template(template)
     elif description:
-        click.echo("Parsing natural language description with Claude API...")
+        # Determine which API key to use
+        if openrouter_key:
+            selected_key = openrouter_key
+            selected_provider = provider or "openrouter"
+            selected_model = model or "x-ai/grok-4.20"
+        else:
+            selected_key = api_key
+            selected_provider = provider or "anthropic"
+            selected_model = model or "claude-sonnet-4-20250514"
+
+        click.echo(f"Parsing with {selected_provider} ({selected_model})...")
         from processflow.parser.nl_parser import parse_nl_to_spec
-        process_spec = parse_nl_to_spec(description, api_key=api_key)
+        process_spec = parse_nl_to_spec(
+            description,
+            api_key=selected_key,
+            model=selected_model,
+            provider=selected_provider,
+        )
     else:
         click.echo("Error: Provide a description, --spec file, or --template name.", err=True)
         sys.exit(1)
@@ -111,7 +134,30 @@ def generate(
             click.echo(f"  Total Capital Investment: ${results.tci_usd/1e6:.1f}M")
             click.echo(f"  Annual Operating Cost: ${results.aoc_usd_per_yr/1e6:.1f}M/yr")
         except NotImplementedError as e:
-            click.echo(f"Simulation skipped: {e}", err=True)
+            # Try generic TEA if economic data is available
+            if process_spec.economic.capex_usd is not None or process_spec.economic.annual_costs:
+                click.echo(f"BioSTEAM simulation not available: {e}", err=True)
+                click.echo("Running generic TEA from economic data...")
+                try:
+                    from processflow.tea.generic_tea import run_generic_tea
+                    from processflow.tea.xlsx_writer import write_generic_tea_xlsx
+
+                    generic = run_generic_tea(process_spec)
+                    xlsx_path = write_generic_tea_xlsx(generic, process_spec, output_dir / "tea_report.xlsx")
+                    click.echo(f"TEA report saved to {xlsx_path}")
+                    click.echo(f"\nKey Results (Generic TEA):")
+                    click.echo(f"  CAPEX: ${generic.capex_usd/1e6:.1f}M")
+                    click.echo(f"  Annual OPEX: ${generic.total_annual_costs_usd/1e6:.2f}M/yr")
+                    click.echo(f"  Annual Revenue: ${generic.total_annual_revenues_usd/1e6:.2f}M/yr")
+                    click.echo(f"  NPV ({generic.plant_lifetime_years}yr): ${generic.npv_usd/1e6:.2f}M")
+                    if generic.simple_payback_years:
+                        click.echo(f"  Simple Payback: {generic.simple_payback_years:.1f} years")
+                    if generic.lcop_usd_per_unit:
+                        click.echo(f"  LCOP: ${generic.lcop_usd_per_unit:.2f} {generic.lcop_unit}")
+                except Exception as e2:
+                    click.echo(f"Generic TEA also failed: {e2}", err=True)
+            else:
+                click.echo(f"Simulation skipped: {e}", err=True)
         except Exception as e:
             click.echo(f"Simulation failed: {e}", err=True)
     else:

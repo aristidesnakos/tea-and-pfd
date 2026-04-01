@@ -52,15 +52,18 @@ class TestProcessSpec:
         assert "properties" in schema
         assert "process_name" in schema["properties"]
 
-    def test_invalid_stream_reference(self):
-        """Stream referencing a non-existent unit raises ValidationError."""
-        with pytest.raises(ValidationError, match="not found"):
-            ProcessSpec(
-                process_name="Bad",
-                feedstock=Feedstock(name="x", flow_rate_kg_hr=100),
-                units=[UnitOperation(id="U-101", type=UnitType.MIXER)],
-                streams=[Stream(from_id="feed", to_id="NONEXISTENT")],
-            )
+    def test_boundary_node_stream_accepted(self):
+        """Stream to a non-unit-ID boundary node is accepted (relaxed validation)."""
+        spec = ProcessSpec(
+            process_name="CCS",
+            feedstock=Feedstock(name="exhaust", flow_rate_kg_hr=100),
+            units=[UnitOperation(id="U-101", type="amine_absorber")],
+            streams=[
+                Stream(from_id="FEED", to_id="U-101"),
+                Stream(from_id="U-101", to_id="VENT"),
+            ],
+        )
+        assert len(spec.streams) == 2
 
     def test_invalid_reaction_reference(self):
         """Reaction referencing a non-existent unit raises ValidationError."""
@@ -79,7 +82,7 @@ class TestProcessSpec:
         """Look up unit by ID."""
         unit = corn_stover_spec.get_unit_by_id("U-201")
         assert unit is not None
-        assert unit.type == UnitType.PRETREATMENT
+        assert unit.type == "Pretreatment"
         assert corn_stover_spec.get_unit_by_id("NONEXISTENT") is None
 
     def test_connected_graph(self, corn_stover_spec: ProcessSpec):

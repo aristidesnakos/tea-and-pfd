@@ -16,22 +16,22 @@ SECTION_COLORS: dict[str, str] = {
     "utilities": "#e0f2f1",
 }
 
-# Shape mapping: unit type -> mermaid node shape
-UNIT_SHAPES: dict[UnitType, tuple[str, str]] = {
-    UnitType.REACTOR: ("{{", "}}"),
-    UnitType.FERMENTOR: ("{{", "}}"),
-    UnitType.ENZYMATIC_HYDROLYSIS: ("{{", "}}"),
-    UnitType.PRETREATMENT: ("{{", "}}"),
-    UnitType.DISTILLATION: ("([", "])"),
-    UnitType.MOLECULAR_SIEVE: ("([", "])"),
-    UnitType.EVAPORATOR: ("([", "])"),
-    UnitType.FLASH: ("([", "])"),
-    UnitType.BOILER: ("[/", "\\]"),
-    UnitType.TURBINE: ("[/", "\\]"),
-    UnitType.PUMP: (">", "]"),
-    UnitType.HEAT_EXCHANGER: ("[", "]"),
-    UnitType.STORAGE_TANK: ("[(", ")]"),
-    UnitType.WASTEWATER_TREATMENT: ("[[", "]]"),
+# Shape mapping: unit type string -> mermaid node shape
+UNIT_SHAPES: dict[str, tuple[str, str]] = {
+    UnitType.REACTOR.value: ("{{", "}}"),
+    UnitType.FERMENTOR.value: ("{{", "}}"),
+    UnitType.ENZYMATIC_HYDROLYSIS.value: ("{{", "}}"),
+    UnitType.PRETREATMENT.value: ("{{", "}}"),
+    UnitType.DISTILLATION.value: ("([", "])"),
+    UnitType.MOLECULAR_SIEVE.value: ("([", "])"),
+    UnitType.EVAPORATOR.value: ("([", "])"),
+    UnitType.FLASH.value: ("([", "])"),
+    UnitType.BOILER.value: ("[/", "\\]"),
+    UnitType.TURBINE.value: ("[/", "\\]"),
+    UnitType.PUMP.value: (">", "]"),
+    UnitType.HEAT_EXCHANGER.value: ("[", "]"),
+    UnitType.STORAGE_TANK.value: ("[(", ")]"),
+    UnitType.WASTEWATER_TREATMENT.value: ("[[", "]]"),
 }
 
 DEFAULT_SHAPE = ("[", "]")
@@ -42,9 +42,9 @@ def _node_id(unit_id: str) -> str:
     return unit_id.replace("-", "_")
 
 
-def _node_label(unit_id: str, name: str | None, unit_type: UnitType) -> str:
+def _node_label(unit_id: str, name: str | None, unit_type: str) -> str:
     """Create the display label for a unit node."""
-    label = name or unit_type.value
+    label = name or unit_type
     return f"{unit_id}\\n{label}"
 
 
@@ -98,8 +98,9 @@ def render_mermaid(spec: ProcessSpec, direction: str = "LR") -> str:
         # Build edge label from components
         label_parts = []
         if stream.components:
-            label_parts.append(", ".join(stream.components[:3]))
-            if len(stream.components) > 3:
+            names = stream.component_names
+            label_parts.append(", ".join(names[:3]))
+            if len(names) > 3:
                 label_parts.append("...")
         if stream.flow_rate_kg_hr:
             label_parts.append(f"{stream.flow_rate_kg_hr:.0f} kg/hr")
@@ -142,7 +143,7 @@ def render_mermaid_markdown(spec: ProcessSpec, direction: str = "LR") -> str:
 | ID | Type | Name | Section |
 |----|------|------|---------|
 """ + "\n".join(
-        f"| {u.id} | {u.type.value} | {u.name or '-'} | {u.section or '-'} |"
+        f"| {u.id} | {u.type} | {u.name or '-'} | {u.section or '-'} |"
         for u in spec.units
     )
 

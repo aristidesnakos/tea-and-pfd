@@ -44,7 +44,7 @@ class TestTopologyEngine:
         assert any("Duplicate" in e for e in result.errors)
 
     def test_missing_feed_stream(self, engine):
-        """Missing feed stream is caught."""
+        """Missing feed stream generates a warning."""
         spec = ProcessSpec(
             process_name="Bad",
             feedstock=Feedstock(name="x", flow_rate_kg_hr=100),
@@ -52,8 +52,7 @@ class TestTopologyEngine:
             streams=[Stream(from_id="U-101", to_id="product")],
         )
         result = engine.validate(spec)
-        assert not result.valid
-        assert any("feed" in e.lower() for e in result.errors)
+        assert any("feed" in w.lower() for w in result.warnings)
 
     def test_orphan_units_warned(self, engine):
         """Orphan units (not connected) generate warnings."""
@@ -87,11 +86,11 @@ class TestRegistry:
         """Common unit types have registry entries."""
         for ut in [UnitType.MIXER, UnitType.REACTOR, UnitType.DISTILLATION,
                    UnitType.PUMP, UnitType.HEAT_EXCHANGER]:
-            assert get_registry_entry(ut) is not None
+            assert get_registry_entry(ut.value) is not None
 
     def test_default_params_with_subtype(self):
         """Subtype overrides are applied to default params."""
-        params = get_default_params(UnitType.PRETREATMENT, "dilute_acid")
+        params = get_default_params(UnitType.PRETREATMENT.value, "dilute_acid")
         assert "tau" in params
         assert "T" in params
 

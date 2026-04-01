@@ -208,7 +208,7 @@ def _write_process_inputs_sheet(wb: Workbook, spec: ProcessSpec) -> None:
     row += 1
 
     for unit_op in spec.units:
-        ws.cell(row=row, column=1, value=f"{unit_op.id}: {unit_op.name or unit_op.type.value}").font = Font(bold=True)
+        ws.cell(row=row, column=1, value=f"{unit_op.id}: {unit_op.name or unit_op.type}").font = Font(bold=True)
         row += 1
         for key, val in unit_op.params.items():
             path = f"units.{unit_op.id}.params.{key}"
@@ -231,7 +231,7 @@ def _write_mass_balance_sheet(wb: Workbook, spec: ProcessSpec) -> None:
         ws.cell(row=i, column=2, value=stream.from_id)
         ws.cell(row=i, column=3, value=stream.to_id)
         ws.cell(row=i, column=4, value=stream.phase or "-")
-        ws.cell(row=i, column=5, value=", ".join(stream.components) if stream.components else "-")
+        ws.cell(row=i, column=5, value=", ".join(stream.component_names) if stream.components else "-")
         cell = ws.cell(row=i, column=6, value=stream.flow_rate_kg_hr)
         if stream.flow_rate_kg_hr:
             cell.number_format = NUMBER_FORMAT
@@ -441,6 +441,144 @@ def write_tea_xlsx(
     _write_operating_costs_sheet(wb, results)
     _write_cashflow_sheet(wb, results)
     _write_sensitivity_sheet(wb, spec)
+
+    wb.save(str(path))
+    return path
+
+
+def write_generic_tea_xlsx(
+    results: "GenericTEAResults",
+    spec: ProcessSpec,
+    path: str | Path,
+) -> Path:
+    """Generate a TEA XLSX report from generic (non-BioSTEAM) TEA results.
+
+    Generates a 5-sheet workbook:
+    1. Summary — Key metrics
+    2. Process Inputs — All parameters
+    3. Mass Balance — Stream table
+    4. OPEX Breakdown — Annual cost & revenue line items
+    5. Cash Flow — Year-by-year NPV analysis
+
+    Args:
+        results: GenericTEAResults from generic_tea.run_generic_tea()
+        spec: The ProcessSpec used
+        path: Output file path (.xlsx)
+
+    Returns:
+        Path to the saved XLSX file
+    """
+    from processflow.tea.generic_tea import GenericTEAResults  # noqa: F811
+
+    path = Path(path)
+    wb = Workbook()
+
+    # --- Sheet 1: Summary ---
+    ws = wb.active
+    ws.title = "Summary"
+
+    ws.cell(row=1, column=1, value=f"TEA Summary: {spec.process_name}").font = Font(bold=True, size=14)
+    ws.cell(row=2, column=1, value=spec.description).font = Font(size=9, color="666666")
+
+    _write_header(ws, 4, ["Metric", "Value", "Unit", "Source"])
+
+    row = 5
+    _write_subheader(ws, row, "Key Performance Indicators", 4)
+    row += 1
+
+    metrics = [
+        ("Total Capital Investment (CAPEX)", results.capex_usd / 1e6, "MM$", CURRENCY_M_FORMAT, "User input"),
+        ("Annualized CAPEX (CRF)", results.annualized_capex_usd / 1e6, "MM$/yr", CURRENCY_M_FORMAT, "Calculated"),
+        ("Total Annual Operating Costs", results.total_annual_costs_usd / 1e6, "MM$/yr", CURRENCY_M_FORMAT, "User input"),
+        ("Total Annual Revenues/Savings", results.total_annual_revenues_usd / 1e6, "MM$/yr", CURRENCY_M_FORMAT, "User input"),
+        ("Net Annual Cash Flow", results.net_annual_cashflow_usd / 1e6, "MM$/yr", CURRENCY_M_FORMAT, "Calculated"),
+        ("Net Present Value (NPV)", results.npv_usd / 1e6, "MM$", CURRENCY_M_FORMAT, "Calculated"),
+    ]
+
+    if results.simple_payback_years is not None:
+        metrics.append(("Simple Payback Period", results.simple_payback_years, "years", NUMBER_FORMAT, "Calculated"))
+
+    if results.lcop_usd_per_unit is not None:
+        metrics.append(("Levelized Cost of Product (LCOP)", results.lcop_usd_per_unit, results.lcop_unit, CURRENCY_M_FORMAT, "Calculated"))
+
+    for label, val, unit, fmt, src in metrics:
+        _write_metric_row(ws, row, label, val, unit, fmt, src)
+        row += 1
+
+    row += 1
+    _write_subheader(ws, row, "Parameters", 4)
+    row += 1
+    _write_metric_row(ws, row, "Discount Rate", results.discount_rate, "", PERCENT_FORMAT, "User input")
+    row += 1
+    _write_metric_row(ws, row, "Plant Lifetime", results.plant_lifetime_years, "years", source="User input")
+    row += 1
+    _write_metric_row(ws, row, "Operating Days", results.operating_days, "days/yr", source="User input")
+
+    ws.freeze_panes = "A5"
+    _auto_width(ws)
+
+    # --- Sheet 2: Process Inputs ---
+    _write_process_inputs_sheet(wb, spec)
+
+    # --- Sheet 3: Mass Balance ---
+    _write_mass_balance_sheet(wb, spec)
+
+    # --- Sheet 4: OPEX Breakdown ---
+    ws_opex = wb.create_sheet("OPEX Breakdown")
+    _write_header(ws_opex, 1, ["Category", "Annual Cost ($)", "% of Total"])
+
+    total_cost = results.total_annual_costs_usd or 1  # avoid division by zero
+    row = 2
+    for name, val in results.annual_cost_items.items():
+        ws_opex.cell(row=row, column=1, value=name.replace("_", " ").title())
+        ws_opex.cell(row=row, column=2, value=val).number_format = CURRENCY_FORMAT
+        ws_opex.cell(row=row, column=3, value=val / total_cost).number_format = PERCENT_FORMAT
+        for col in range(1, 4):
+            ws_opex.cell(row=row, column=col).border = THIN_BORDER
+        row += 1
+
+    ws_opex.cell(row=row, column=1, value="TOTAL COSTS").font = Font(bold=True)
+    ws_opex.cell(row=row, column=2, value=results.total_annual_costs_usd).number_format = CURRENCY_FORMAT
+    row += 2
+
+    if results.annual_revenue_items:
+        ws_opex.cell(row=row, column=1, value="Revenue / Savings").font = Font(bold=True)
+        row += 1
+        for name, val in results.annual_revenue_items.items():
+            ws_opex.cell(row=row, column=1, value=name.replace("_", " ").title())
+            ws_opex.cell(row=row, column=2, value=val).number_format = CURRENCY_FORMAT
+            for col in range(1, 3):
+                ws_opex.cell(row=row, column=col).border = THIN_BORDER
+            row += 1
+        ws_opex.cell(row=row, column=1, value="TOTAL REVENUE").font = Font(bold=True)
+        ws_opex.cell(row=row, column=2, value=results.total_annual_revenues_usd).number_format = CURRENCY_FORMAT
+
+    ws_opex.freeze_panes = "A2"
+    _auto_width(ws_opex)
+
+    # --- Sheet 5: Cash Flow ---
+    ws_cf = wb.create_sheet("Cash Flow")
+    cf = results.cashflow_table
+    if cf is not None and not cf.empty:
+        headers = list(cf.columns)
+        _write_header(ws_cf, 1, headers)
+
+        for i, (_, row_data) in enumerate(cf.iterrows(), 2):
+            for j, val in enumerate(row_data, 1):
+                cell = ws_cf.cell(row=i, column=j, value=float(val) if hasattr(val, '__float__') else _safe_value(val))
+                col_name = headers[j - 1]
+                if "$" in col_name:
+                    cell.number_format = CURRENCY_FORMAT
+                elif "Factor" in col_name:
+                    cell.number_format = "0.0000"
+                else:
+                    cell.number_format = NUMBER_FORMAT
+                cell.border = THIN_BORDER
+
+        ws_cf.freeze_panes = "B2"
+        _auto_width(ws_cf)
+    else:
+        ws_cf.cell(row=1, column=1, value="No cash flow data available")
 
     wb.save(str(path))
     return path
