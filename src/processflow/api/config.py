@@ -25,21 +25,24 @@ class Settings(BaseSettings):
     llm_model: str = "claude-sonnet-4-20250514"  # default model for the selected provider
     host: str = "0.0.0.0"
     port: int = 8000
+    reload: bool = True
 
     def get_api_key(self) -> str:
         """Get the appropriate API key based on configured provider."""
         if self.llm_provider == "openrouter":
-            if not self.openrouter_api_key:
+            key = self.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY")
+            if not key:
                 raise RuntimeError(
                     "OpenRouter provider selected but PROCESSFLOW_OPENROUTER_API_KEY not set"
                 )
-            return self.openrouter_api_key
+            return key
         else:  # anthropic
-            if not self.anthropic_api_key:
+            key = self.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY")
+            if not key:
                 raise RuntimeError(
                     "Anthropic provider selected but PROCESSFLOW_ANTHROPIC_API_KEY not set"
                 )
-            return self.anthropic_api_key
+            return key
 
 
 settings = Settings()

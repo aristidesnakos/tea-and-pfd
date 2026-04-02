@@ -65,5 +65,5 @@ def run():
         "processflow.api.app:app",
         host=settings.host,
         port=settings.port,
-        reload=True,
+        reload=settings.reload,
     )
